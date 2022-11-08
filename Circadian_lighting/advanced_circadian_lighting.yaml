@@ -1,0 +1,1031 @@
+blueprint:
+
+
+  # INTRODUCTION
+  name: Advanced Circadian Lighting
+  description: >-
+    This automation adjusts light brightness, temperature, and color hue,
+    based on presence, current time and sun position.
+    Available features:
+      - Works with lights supporting different types of color modes.
+      - Adjusts brightness, temperature and hue based on the circadian cycle.
+        - The circadian cycle can be defined based on sunrise and sunset times.
+        - Sunrise and sunset times can also be defined manually.
+        - Light attrubutes can be adjusted following various types of functions.
+        - The minimum and maximum brightness and temperature can be configured.
+        - This option can be deactivated.
+      - Turns the lights on at sunset and off at sunrise.
+        - Option to inverse this behaviour for daytime lights.
+        - Sunrise and sunset can be defined in terms of sun elevation.
+        - Gradually dims lights on or off within a sun elevation range.
+        - This option can be deactivated.
+      - Turns the lights on and off based on presence.
+        - Presence is defined in terms of an entity, that can be on or home.
+        - Can also be defined in terms of a media player that is playing or paused.
+        - Option to inverse this behaviour for away lights.
+        - This option is deacivated when no entity is selected.
+      - Allows to define a sleeping-mode entity that can be turned on.
+        - When this entity is turned on, lights turn off.
+        - Alternatively, lights can switch to midnight attributes.
+        - This option is deactivated when no entity is selected.
+      - Gets automatically activated when a light is turned on.
+        - Runs when the turn on service does not define light brightness or color.
+        - Does not run when the turn on service also defines light attributes, e.g. in scenes.
+        - Stops running when light attributes are manually changed.
+        - The light will still turn off automatically.
+  domain: automation
+
+
+  # INPUT
+  input:
+
+    # Input - Lights
+    lights_target:
+      name: Lights
+      description: >-
+        List of lights to adjust.
+        On/off, brightness, temperature and color modes are supported.
+      selector:
+        target:
+          entity:
+            domain: light
+
+    # Input - Circadian
+    circadian_type:
+      name: Circadian cycle
+      description: >-
+        Determines how the circadian cycle will be defined.
+        Select sun to use actual sunrise and sunset times.
+        Select time to override with manual sunrise and sunset times.
+      selector:
+        select:
+          options:
+            - Sun
+            - Time
+      default: Time
+    circadian_sunrise:
+      name: Circadian manual sunrise time
+      description: >-
+        Defines the start of daytime when the circadian rhythm is time-based.
+        This value is ignored when using actual sunrise and sunset times.
+      selector:
+        time:
+      default: "07:30:00"
+    circadian_sunset:
+      name: Circadian manual sunset time
+      description: >-
+        Defines the end of daytime when the circadian rhythm is time-based.
+        This value is ignored when using sunrise and sunset times.
+      selector:
+        time:
+      default: "21:30:00"
+    circadian_function:
+      name: Circadian function
+      description: >-
+        Determines the function used for circadian cycle adjustments.
+        Use day-only or night-only to adjust lights in daytime or nightime.
+        Day & night half-sine functions are similar to the full cycle cosine.
+        Select day & night cosine functions for smoother transitions.
+        Select none to skip circadian cycle adjustments.
+      default: Day-only (half-sine)
+      selector:
+        select:
+          options:
+            - Day-only (half-sine)
+            - Day-only (cosine)
+            - Night-only (half-sine)
+            - Night-only (cosine)
+            - Day & night (cosine)
+            - None
+    circadian_brightness_midday:
+      name: Circadian brightness at midday
+      description: >-
+        Sets the maximum (or minimum) value that light brightness
+        will reach at midday.
+        This value is also used when circadian lighting is disabled.
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5
+    circadian_brightness_midnight:
+      name: Circadian brightness at midnight
+      description: >-
+        Sets the minimum (or maximum) value that light brightness
+        will reach at midnight.
+        This value is ignored when circadian lighting is disabled.
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5
+    circadian_temperature_midday:
+      name: Circadian temperature at midday
+      description: >-
+        Sets the maximum (or minimum) value that color temperature
+        will reach at midday.
+        This value is also used when circadian lighting is disabled.
+      default: 4100
+      selector:
+        number:
+          min: 2700
+          max: 6500
+          unit_of_measurement: "Kelvin"
+          mode: slider
+          step: 100
+    circadian_temperature_midnight:
+      name: Circadian temperature at midnight
+      description: >-
+        Sets the minimum (or maximum) value that color temperature
+        will reach at midnight.
+        This value is ignored when circadian lighting is disabled.
+      default: 2700
+      selector:
+        number:
+          min: 2700
+          max: 6500
+          unit_of_measurement: "Kelvin"
+          mode: slider
+          step: 100
+    circadian_hue_default:
+      name: Circadian default hue
+      description: >-
+        Sets the hue value to be used for when circadian lighting is disabled.
+      default: 180
+      selector:
+        number:
+          min: 0
+          max: 360
+          unit_of_measurement: "°"
+          mode: slider
+          step: 5
+    circadian_saturation_default:
+      name: Circadian default saturation
+      description: >-
+        Sets the color saturation value to be used for circadian adjustments.
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5
+
+
+    # Input Elevation
+    elevation_switch_on:
+      name: Dim lights on based on sun elevation
+      description: >-
+        Normally, the lights will dim on at sunset,
+        and they will be turned on during nightime.
+      default: true
+      selector:
+        boolean:
+    elevation_switch_off:
+      name: Dim lights off based on sun elevation
+      description: >-
+        Normally, the lights will dim off at sunrise,
+        and they will be turned off during daytime.
+      default: true
+      selector:
+        boolean:
+    elevation_inverse:
+      name: Inverse light dimming behaviour
+      description: >-
+        Dim the lights on at sunrise and off at sunset.
+        The lights will be turned on during daytime
+        and off during nightime.
+      default: false
+      selector:
+        boolean:
+    elevation_sunrise_start:
+      name: Sunrise start elevation
+      description: >-
+        Defines the beginning of sunrise in terms of sun elevation.
+        Normally, this is when lights start to dim off.
+        When dimming is inversed, this is when lights turn on.
+      default: -8
+      selector:
+        number:
+          min: -20
+          max: 10
+          unit_of_measurement: "°"
+          mode: slider
+          step: 1
+    elevation_sunrise_end:
+      name: Sunrise end elevation
+      description: >-
+        Defines the end of sunrise in terms of sun elevation.
+        Normally, this is when lights turn off.
+        When dimming is inversed, this is when lights have fully dimmed on.
+      default: 6
+      selector:
+        number:
+          min: -10
+          max: 20
+          unit_of_measurement: "°"
+          mode: slider
+          step: 1
+    elevation_sunset_start:
+      name: Sunset start elevation
+      description: >-
+        Defines the beginning of sunset in terms of sun elevation.
+        Normally, this is when lights turn on.
+        When dimming is inversed, this is when lights start to dim off.
+      default: 6
+      selector:
+        number:
+          min: -10
+          max: 20
+          unit_of_measurement: "°"
+          mode: slider
+          step: 1
+    elevation_sunset_end:
+      name: Sunset end elevation
+      description: >-
+        Defines the end of sunset in terms of sun elevation.
+        Normally, this is when light have fully dimmed on.
+        When dimming is inversed, this is when lights turn off.
+      default: -8
+      selector:
+        number:
+          min: -20
+          max: 10
+          unit_of_measurement: "°"
+          mode: slider
+          step: 1
+
+    # Input Presence
+    presence_switch_on:
+      name: Turn lights on based on presence
+      description: >-
+        Normally, the lights will turn on when presence turns on,
+        and they will be on when at home.
+      default: true
+      selector:
+        boolean:
+    presence_switch_off:
+      name: Turn lights off based on presence
+      description: >-
+        Normally, the lights will turn off when presence turns off,
+        and they will be off when away.
+      default: true
+      selector:
+        boolean:
+    presence_inverse:
+      name: Inverse presence light behaviour
+      description: >-
+        Turn the lights on when presence turns off
+        and off when presence turns on.
+        The lights will be off when at home
+        and on when away.
+      default: false
+      selector:
+        boolean:
+    presence_entity:
+      name: Presence entity_id
+      description: >-
+        This can be a device_tracker, an input_boolean, a binary_sensor,
+        or any entity that can switch to "on" or "home".
+        It can also be a media_player that can swith to "playing" or "paused".
+      default: "device_tracker.me"
+      selector:
+        entity:
+
+    # Input Sleep Mode
+    sleep_mode:
+      name: Sleep Mode
+      description: >-
+        Defines what will happen when the sleep mode switch is activated.
+        On and off will turn the lights on and off, respectively.
+        Day and night will switch to midday and midnight attributes, respectively.
+        None will do nothing.
+      selector:
+        select:
+          options:
+            - Turn on
+            - Turn off
+            - Day
+            - Night
+            - None
+      default: Turn off
+    sleep_entity:
+      name: Sleep entity_id
+      description: >-
+        This can be a device_tracker, an input_boolean, a binary_sensor,
+        or any entity that can switch to "on" or "home".
+      default: "input_boolean.sleep"
+      selector:
+        entity:
+
+# VARIABLES
+variables:
+
+  # Variables Sleep
+  sleep_mode: !input sleep_mode
+  sleep_entity: !input sleep_entity
+  sleep_on: >-
+    {# Boolean for sleep on trigger #}
+    {{ trigger is defined
+        and trigger.platform == 'state'
+        and trigger.from_state.entity_id is defined
+        and trigger.from_state.entity_id == sleep_entity
+        and trigger.to_state.state is defined
+        and ( ( sleep_mode == 'Turn on'
+            and trigger.to_state.state == 'on' )
+          or ( sleep_mode == 'Turn off'
+            and trigger.to_state.state == 'off' ) ) }}
+  sleep_off: >-
+    {# Boolean for sleep off trigger #}
+    {{ trigger is defined
+        and trigger.platform == 'state'
+        and trigger.from_state.entity_id is defined
+        and trigger.from_state.entity_id == sleep_entity
+        and trigger.to_state.state is defined
+        and ( ( sleep_mode == 'Turn on'
+            and trigger.to_state.state == 'off' )
+          or ( sleep_mode == 'Turn off'
+            and trigger.to_state.state == 'on' ) ) }}
+  sleep_trigger: >-
+    {# Boolean for sleep attributes trigger #}
+    {{ trigger is defined
+        and trigger.platform == 'state'
+        and trigger.from_state.entity_id is defined
+        and trigger.from_state.entity_id == sleep_entity
+        and trigger.to_state.state is defined
+        and sleep_mode in ['Day','Night'] }}
+  sleep_condition: >-
+    {# Boolean for lights on #}
+    {{ states(sleep_entity) == 'unknown'
+        or sleep_mode not in ['Turn on','Turn off']
+        or ( sleep_mode == 'Turn on'
+          and states(sleep_entity) == 'on' )
+        or ( sleep_mode == 'Turn off'
+          and states(sleep_entity) == 'off' ) }}
+  # Variables Circadian
+  circadian_type: !input circadian_type
+  circadian_sunrise: !input circadian_sunrise
+  circadian_sunset: !input circadian_sunset
+  circadian_function: !input circadian_function
+  circadian_position: >-
+    {# Define next sunrise and sunset times based on sun or manual input #}
+    {%- set time_current = now()|as_timestamp -%}
+    {%- if circadian_type == 'Sun' and states('sun.sun') != 'unknown' -%}
+      {%- set time_sunrise = state_attr('sun.sun','next_rising')|as_timestamp -%}
+      {%- set time_sunset = state_attr('sun.sun','next_setting')|as_timestamp -%}
+    {%- else -%}
+      {%- set time_sunrise = today_at(circadian_sunrise)|as_timestamp -%}
+      {%- set time_sunset = today_at(circadian_sunset)|as_timestamp -%}
+      {# Fix input times so that they reflect the next sunrise and sunset #}
+      {%- if time_sunrise < time_current -%}
+        {% set time_sunrise = time_sunrise + 86400 -%}
+      {%- endif -%}
+      {%- if time_sunset < time_current -%}
+        {% set time_sunset = time_sunset + 86400 -%}
+      {%- endif -%}
+    {%- endif -%}
+    {# Calculate sun position, from -1 to 0 in nightime and 0 to 1 in daytime. #}
+    {%- if time_sunrise > time_sunset -%}
+      {%- set time_sunrise = [time_sunrise-86400,time_current]|min -%}
+      {%- set position = (time_current-time_sunrise) / (time_sunset-time_sunrise) -%}
+    {%- else -%}
+      {%- set time_sunset = [time_sunset-86400,time_current]|min -%}
+      {%- set position = (time_current-time_sunrise) / (time_sunrise-time_sunset) -%}
+    {%- endif -%}
+    {# Return calculated result #}
+    {{ position }}
+  circadian_coefficient: >-
+    {# Calculate coefficient based on selected circadian function #}
+    {%- if is_state(sleep_entity,'on') and sleep_mode == 'Night' -%}
+      {%- set coefficient = 0.0 -%}
+    {%- elif is_state(sleep_entity,'on') and sleep_mode == 'Day' -%}
+      {%- set coefficient = 1.0 -%}
+    {%- elif circadian_function == 'Day-only (half-sine)' -%}
+      {%- set coefficient = sin( pi*([circadian_position,0]|max) ) -%}
+    {%- elif circadian_function == 'Day-only (cosine)' -%}
+      {%- set coefficient = 0.5 - 0.5 * cos( 2*pi*([circadian_position,0]|max) ) -%}
+    {%- elif circadian_function == 'Night-only (half-sine)' -%}
+      {%- set coefficient = 1 - sin( pi*([circadian_position,0]|min) ) -%}
+    {%- elif circadian_function == 'Night-only (cosine)' -%}
+      {%- set coefficient = 0.5 + 0.5 * cos( 2*pi*([circadian_position,0]|min) ) -%}
+    {%- elif circadian_function == 'Day & night (cosine)' -%}
+      {%- set coefficient = 0.5 + 0.5 * sin( pi*circadian_position ) -%}
+    {%- else -%}
+      {%- set coefficient = -1.0 -%}
+    {%- endif -%}
+    {# Return calculated result #}
+    {{ coefficient }}
+  circadian_angle: >-
+    {# Calculate angle based on selected circadian function #}
+    {%- if is_state(sleep_entity,'on') and sleep_mode == 'Night' -%}
+      {%- set angle = 0.0 -%}
+    {%- elif is_state(sleep_entity,'on') and sleep_mode == 'Day' -%}
+      {%- set angle = 0.5 -%}
+    {%- elif circadian_function == 'Day-only (half-sine)'
+          or circadian_function == 'Day-only (cosine)' -%}
+      {%- set angle = [circadian_position,0]|max -%}
+    {%- elif circadian_function == 'Night-only (half-sine)'
+          or circadian_function == 'Night-only (cosine)' -%}
+      {%- if circadian_position < -0.5 -%}
+        {%- set angle = 1.5 + circadian_position -%}
+      {%- else -%}
+        {%- set angle = 0.5 + [circadian_position,0]|min -%}
+      {%- endif -%}
+    {%- elif circadian_function == 'Day & night (cosine)' -%}
+      {%- if circadian_position < -0.5 -%}
+        {%- set angle = 1.25 + 0.5 * circadian_position -%}
+      {%- else -%}
+        {%- set angle = 0.25 + 0.5 * circadian_position -%}
+      {%- endif -%}
+    {%- else -%}
+      {%- set angle = -1.0 -%}
+    {%- endif -%}
+    {# Return calculated result #}
+    {{ angle }}
+  circadian_brightness_midday: !input circadian_brightness_midday
+  circadian_brightness_midnight: !input circadian_brightness_midnight
+  circadian_brightness_value: >-
+    {# Light brightness value to adjust to #}
+    {%- if circadian_coefficient < 0 -%}
+      {{ [ ( 2.54 * circadian_brightness_midday|float + 0.5)|int , 1]|max }}
+    {%- else -%}
+      {{ [ ( 2.54 * ( circadian_brightness_midnight|float + circadian_coefficient * ( circadian_brightness_midday|float - circadian_brightness_midnight|float ) ) + 0.5)|int , 1]|max }}
+    {%- endif -%}
+  circadian_temperature_midday: !input circadian_temperature_midday
+  circadian_temperature_midnight: !input circadian_temperature_midnight
+  circadian_temperature_value: >-
+    {# Color temperature value to adjust to #}
+    {%- if circadian_coefficient < 0 -%}
+      {{ ( 1000000/circadian_temperature_midday + 0.5)|int }}
+    {%- else -%}
+      {{ ( 1000000/circadian_temperature_midnight|float + circadian_coefficient * ( 1000000/circadian_temperature_midday|float - 1000000/circadian_temperature_midnight|float ) + 0.5)|int }}
+    {%- endif -%}
+  circadian_hue_default_input: !input circadian_hue_default
+  circadian_hue_default: '{{ circadian_hue_default_input|float }}'
+  circadian_hue_value: >-
+    {# Color hue value to adjust to #}
+    {%- if circadian_angle < 0 -%}
+      {{ circadian_hue_default }}
+    {%- else -%}
+      {{ (360 * circadian_angle + 0.5)|int }}
+    {%- endif -%}
+  circadian_saturation_default_input: !input circadian_saturation_default
+  circadian_saturation_default: '{{ circadian_saturation_default_input|float }}'
+
+  # Variables Sunrise/Sunset
+  elevation_switch_on_input: !input elevation_switch_on
+  elevation_switch_on: "{{ states('sun.sun') != 'unknown' and elevation_switch_on_input }}"
+  elevation_switch_off_input: !input elevation_switch_off
+  elevation_switch_off: "{{ states('sun.sun') != 'unknown' and elevation_switch_off_input }}"
+  elevation_inverse: !input elevation_inverse
+  elevation_sunrise_start_input: !input elevation_sunrise_start
+  elevation_sunrise_start: "{{ elevation_sunrise_start_input | float }}"
+  elevation_sunrise_end_input: !input elevation_sunrise_end
+  elevation_sunrise_end: "{{ elevation_sunrise_end_input | float }}"
+  elevation_sunset_start_input: !input elevation_sunset_start
+  elevation_sunset_start: "{{ elevation_sunset_start_input | float }}"
+  elevation_sunset_end_input: !input elevation_sunset_end
+  elevation_sunset_end: "{{ elevation_sunset_end_input | float }}"
+  elevation_condition: >-
+    {# Boolean for lights on #}
+    {{ elevation_switch_off
+        and ( ( not elevation_inverse
+            and ( ( state_attr('sun.sun','rising')
+                and state_attr('sun.sun','elevation') < elevation_sunrise_end )
+              or ( not state_attr('sun.sun','rising')
+                and state_attr('sun.sun','elevation') < elevation_sunset_start ) ) )
+          or ( elevation_inverse
+            and ( ( state_attr('sun.sun','rising')
+                and state_attr('sun.sun','elevation') > elevation_sunrise_start )
+              or ( not state_attr('sun.sun','rising')
+                and state_attr('sun.sun','elevation') > elevation_sunset_end ) ) ) ) }}
+  elevation_dim_on: >-
+    {# Boolean for dimming on #}
+    {{ elevation_switch_on
+        and ( ( not elevation_inverse
+            and not state_attr('sun.sun','rising')
+            and ( ( state_attr('sun.sun','elevation') < elevation_sunset_start
+                and state_attr('sun.sun','elevation') > elevation_sunset_end )
+              or ( trigger is defined
+                and trigger.platform == 'numeric_state'
+                and trigger.from_state.entity_id == 'sun.sun'
+                and trigger.from_state.attributes.elevation < elevation_sunset_start
+                and trigger.from_state.attributes.elevation > elevation_sunset_end ) ) )
+          or ( elevation_inverse
+            and state_attr('sun.sun','rising')
+            and ( ( state_attr('sun.sun','elevation') > elevation_sunrise_start
+                and state_attr('sun.sun','elevation') < elevation_sunrise_end )
+              or ( trigger is defined
+                and trigger.platform == 'numeric_state'
+                and trigger.from_state.entity_id == 'sun.sun'
+                and trigger.from_state.attributes.elevation > elevation_sunrise_start
+                and trigger.from_state.attributes.elevation < elevation_sunrise_end ) ) ) ) }}
+  elevation_dim_off: >-
+    {# Boolean for dimming off #}
+    {{ elevation_switch_off
+        and ( ( not elevation_inverse
+            and state_attr('sun.sun','rising')
+            and state_attr('sun.sun','elevation') > elevation_sunrise_start
+            and state_attr('sun.sun','elevation') < elevation_sunrise_end )
+          or ( elevation_inverse
+            and not state_attr('sun.sun','rising')
+            and state_attr('sun.sun','elevation') < elevation_sunset_start
+            and state_attr('sun.sun','elevation') > elevation_sunset_end ) ) }}
+  elevation_turn_on: >-
+    {# Boolean for turning on #}
+    {{ elevation_switch_on
+        and trigger is defined
+        and trigger.platform == 'numeric_state'
+        and trigger.from_state.entity_id == 'sun.sun'
+        and ( ( not elevation_inverse
+            and trigger.from_state.attributes.elevation > elevation_sunset_start
+            and trigger.to_state.attributes.elevation < elevation_sunset_start)
+          or ( elevation_inverse
+            and trigger.from_state.attributes.elevation < elevation_sunrise_start
+            and trigger.to_state.attributes.elevation > elevation_sunrise_start)) }}
+  elevation_turn_off: >-
+    {# Boolean for turning off #}
+    {{ elevation_switch_off
+        and trigger is defined
+        and trigger.platform == 'numeric_state'
+        and trigger.from_state.entity_id == 'sun.sun'
+        and ( ( not elevation_inverse
+            and trigger.from_state.attributes.elevation < elevation_sunrise_end
+            and trigger.to_state.attributes.elevation > elevation_sunrise_end)
+          or ( elevation_inverse
+            and trigger.from_state.attributes.elevation > elevation_sunset_end
+            and trigger.to_state.attributes.elevation < elevation_sunset_end)) }}
+  elevation_brightness: >-
+    {# Calculate coefficient to be multiplied with brightness #}
+    {%- if elevation_dim_on or elevation_dim_off -%}
+      {%- set elevation_current = state_attr('sun.sun','elevation') -%}
+      {%- if state_attr('sun.sun','rising') -%}
+        {%- set coefficient = 1.0 - (elevation_current-elevation_sunrise_start) / (elevation_sunrise_end-elevation_sunrise_start) -%}
+      {%- else -%}
+        {%- set coefficient = (elevation_current-elevation_sunset_start) / (elevation_sunset_end-elevation_sunset_start) -%}
+      {%- endif -%}
+      {%- if elevation_inverse -%}
+        {%- set coefficient = 1.0 - coefficient -%}
+      {%- endif -%}
+    {%- else -%}
+      {%- set coefficient = 1.0 -%}
+    {%- endif -%}
+    {# Return calculated result #}
+    {# Alternative: 0.5 - 0.5*cos(pi*coefficient) #}
+    {{ [ ( coefficient * circadian_brightness_value + 0.5 )|int , 1]|max }}
+  # Variables Presence
+  presence_entity: !input presence_entity
+  presence_switch_on_input: !input presence_switch_on
+  presence_switch_on: "{{ states(presence_entity) != 'unknown' and presence_switch_on_input }}"
+  presence_switch_off_input: !input presence_switch_off
+  presence_switch_off: "{{ states(presence_entity) != 'unknown' and presence_switch_off_input }}"
+  presence_inverse: !input presence_inverse
+  presence_on: >-
+    {# Boolean for presence trigger #}
+    {{ presence_switch_on
+        and trigger is defined
+        and trigger.platform == 'state'
+        and trigger.from_state.entity_id is defined
+        and trigger.from_state.entity_id == presence_entity
+        and trigger.to_state.state is defined
+        and ( ( not presence_inverse
+            and trigger.to_state.state in ['on','home','playing','paused'] )
+          or ( presence_inverse
+            and trigger.to_state.state not in ['on','home','playing','paused'] ) ) }}
+  presence_off: >-
+    {# Boolean for presence trigger #}
+    {{ presence_switch_off
+        and trigger is defined
+        and trigger.platform == 'state'
+        and trigger.from_state.entity_id is defined
+        and trigger.from_state.entity_id == presence_entity
+        and trigger.to_state.state is defined
+        and ( ( not presence_inverse
+            and trigger.to_state.state not in ['on','home','playing','paused'] )
+          or ( presence_inverse
+            and trigger.to_state.state in ['on','home','playing','paused'] ) ) }}
+  presence_condition: >-
+    {# Boolean for lights on #}
+    {{ presence_switch_off
+        and ( ( not presence_inverse
+            and states(presence_entity) in ['on','home','playing','paused'] )
+          or ( presence_inverse
+            and states(presence_entity) not in ['on','home','playing','paused'] ) ) }}
+  # Variables Trigger
+  turnon_trigger: >-
+    {# Boolean for light.turn_on event trigger #}
+    {{ trigger is defined
+        and trigger.platform == 'event'
+        and trigger.event.data.service_data is defined
+        and trigger.event.data.service_data.entity_id is defined }}
+  # Variables Lights
+  lights_target_input: !input lights_target
+  lights_target: >-
+    {# This is the full list of targetted lights #}
+    {# Ensure that the variable is a list #}
+    {%- if lights_target_input.entity_id is string -%}
+      {%- set lights_list = [lights_target_input.entity_id] -%}
+    {%- else -%}
+      {%- set lights_list = lights_target_input.entity_id -%}
+    {%- endif -%}
+    {{ lights_list }}
+  lights_dim_all: >-
+    {# This is the list of lights that are being dimmed #}
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- if elevation_dim_on or elevation_dim_off -%}
+      {%- for i_entity in lights_target -%}
+        {# Check that the light is being dimmed in one direction #}
+        {# Also check that other circadian values are being followed #}
+        {%- if is_state(i_entity,'on')
+              and ( not sleep_trigger )
+              and ( state_attr(i_entity,'brightness') != none
+                and ( elevation_dim_on
+                  and state_attr(i_entity,'brightness') < elevation_brightness+15 )
+                or ( elevation_dim_off
+                  and state_attr(i_entity,'brightness') > elevation_brightness-15 ) )
+              and ( ( state_attr(i_entity,'color_temp') == none
+                  and state_attr(i_entity,'hs_color') == none )
+                or ( state_attr(i_entity,'hs_color') != none
+                  and state_attr(i_entity,'hs_color')|first > circadian_hue_value-30
+                  and state_attr(i_entity,'hs_color')|first < circadian_hue_value+30 )
+                or ( state_attr(i_entity,'color_temp') != none
+                  and state_attr(i_entity,'color_temp') > circadian_temperature_value-20
+                  and state_attr(i_entity,'color_temp') < circadian_temperature_value+20 ) ) -%}
+          {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{ lights_select.entities }}
+  lights_on_all: >-
+    {# This is the list of lights that follow the circadian cycle #}
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_target -%}
+      {# Check that the light is following all circadian values #}
+      {# Also check that the light is not being dimmed #}
+      {%- if is_state(i_entity,'on')
+            and ( sleep_trigger
+            or ( ( state_attr(i_entity,'brightness') == none
+                or ( state_attr(i_entity,'brightness') != none
+                  and state_attr(i_entity,'brightness') > circadian_brightness_value-15
+                  and state_attr(i_entity,'brightness') < circadian_brightness_value+15 ) )
+              and ( ( state_attr(i_entity,'color_temp') == none
+                  and state_attr(i_entity,'hs_color') == none )
+                or ( state_attr(i_entity,'hs_color') != none
+                  and state_attr(i_entity,'hs_color')|first > circadian_hue_value-30
+                  and state_attr(i_entity,'hs_color')|first < circadian_hue_value+30 )
+                or ( state_attr(i_entity,'color_temp') != none
+                  and state_attr(i_entity,'color_temp') > circadian_temperature_value-20
+                  and state_attr(i_entity,'color_temp') < circadian_temperature_value+20 ) )
+              and i_entity not in lights_dim_all ) ) -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_off_all: >-
+    {# This is the list of lights that are currently off #}
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_target -%}
+      {# Check that the light is off #}
+      {%- if is_state(i_entity,'off') -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_trigger_all: >-
+    {# This is the list of lights that have been triggered #}
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- if turnon_trigger -%}
+      {# Ensure that the triggered lights are a list #}
+      {%- if trigger.event.data.service_data.entity_id is string -%}
+        {%- set lights_list = [trigger.event.data.service_data.entity_id] -%}
+      {%- else -%}
+        {%- set lights_list = trigger.event.data.service_data.entity_id -%}
+      {%- endif -%}
+      {# Check for individual entities within a group light #}
+      {%- set group_list = namespace(entities=[]) -%}
+      {%- for i_entity in lights_list -%}
+        {%- if state_attr(i_entity,'entity_id') is not none -%}
+          {%- if state_attr(i_entity,'entity_id') is string -%}
+            {%- set group_list.entities = group_list.entities + [state_attr(i_entity,'entity_id')] -%}
+          {%- else -%}
+            {%- set group_list.entities = group_list.entities + state_attr(i_entity,'entity_id') -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set lights_list = lights_list + group_list.entities -%}
+      {%- for i_entity in lights_list -%}
+        {# Check that the light is in the target list #}
+        {# Also check that its properties are not being set #}
+        {%- if i_entity in lights_target
+              and ( trigger.event.data.service_data|length == 1
+                or ( is_state(i_entity,'on')
+                  and trigger.event.data.service_data|length <=2
+                  and trigger.event.data.service_data.brightness is not defined
+                  and trigger.event.data.service_data.brightness_pct is not defined ) ) -%}
+          {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{ lights_select.entities }}
+  lights_dim_brightness: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_dim_all -%}
+      {%- if state_attr(i_entity,'color_mode') == 'brightness' -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_dim_color: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_dim_all -%}
+      {%- if state_attr(i_entity,'color_mode') in ['rgb','rgbw','rgbww','xy','hs'] -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_dim_temperature: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_dim_all -%}
+      {%- if state_attr(i_entity,'color_mode') == 'color_temp' -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_on_brightness: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_on_all -%}
+      {%- if state_attr(i_entity,'color_mode') == 'brightness' -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_on_color: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_on_all -%}
+      {%- if state_attr(i_entity,'color_mode') in ['rgb','rgbw','rgbww','xy','hs'] -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_on_temperature: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_on_all -%}
+      {%- if state_attr(i_entity,'color_mode') == 'color_temp' -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_off_onoff: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_off_all -%}
+      {%- if state_attr(i_entity,'supported_color_modes')|first == 'onoff' -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_off_brightness: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_off_all -%}
+      {%- if 'brightness' in state_attr(i_entity,'supported_color_modes')
+        and 'color_temp' not in state_attr(i_entity,'supported_color_modes')
+        and 'rgb' not in state_attr(i_entity,'supported_color_modes')
+        and 'rgbw' not in state_attr(i_entity,'supported_color_modes')
+        and 'rgbww' not in state_attr(i_entity,'supported_color_modes')
+        and 'xy' not in state_attr(i_entity,'supported_color_modes')
+        and 'hs' not in state_attr(i_entity,'supported_color_modes') -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_off_color: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_off_all -%}
+      {%- if 'color_temp' not in state_attr(i_entity,'supported_color_modes')
+        and ('rgb' in state_attr(i_entity,'supported_color_modes')
+          or 'rgbw' in state_attr(i_entity,'supported_color_modes')
+          or 'rgbww' in state_attr(i_entity,'supported_color_modes')
+          or 'xy' in state_attr(i_entity,'supported_color_modes')
+          or 'hs' in state_attr(i_entity,'supported_color_modes') ) -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_off_temperature: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_off_all -%}
+      {%- if 'color_temp' in state_attr(i_entity,'supported_color_modes') -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_trigger_brightness: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_trigger_all -%}
+      {%- if i_entity in lights_off_brightness
+            or ( trigger.event.data.service_data|length == 1
+              and state_attr(i_entity,'color_mode') == 'brightness' ) -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_trigger_color: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_trigger_all -%}
+      {%- if i_entity in lights_off_color
+            or ( trigger.event.data.service_data|length == 1
+              and state_attr(i_entity,'color_mode') in ['rgb','rgbw','rgbww','xy','hs'] )
+            or ( i_entity in lights_on_temperature + lights_dim_temperature
+              and ( trigger.event.data.service_data.hs_color is defined
+                or trigger.event.data.service_data.xy_color is defined
+                or trigger.event.data.service_data.rgb_color is defined
+                or trigger.event.data.service_data.rgbw_color is defined
+                or trigger.event.data.service_data.rgbww_color is defined
+                or trigger.event.data.service_data.color_name is defined ) ) -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+  lights_trigger_temperature: >-
+    {%- set lights_select = namespace(entities=[]) -%}
+    {%- for i_entity in lights_trigger_all -%}
+      {%- if i_entity in lights_off_temperature
+            or ( trigger.event.data.service_data|length == 1
+              and state_attr(i_entity,'color_mode') == 'color_temp' )
+            or ( i_entity in lights_on_color + lights_dim_color
+              and ( trigger.event.data.service_data.color_temp is defined
+                or trigger.event.data.service_data.kelvin is defined ) ) -%}
+        {%- set lights_select.entities = lights_select.entities + [i_entity] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ lights_select.entities }}
+# AUTOMATION
+mode: 'queued'
+
+
+# TRIGGER
+trigger:
+  - platform: time_pattern
+    minutes: "/1"
+  - platform: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    above: !input elevation_sunrise_start
+  - platform: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    above: !input elevation_sunrise_end
+  - platform: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    below: !input elevation_sunset_start
+  - platform: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    below: !input elevation_sunset_end
+  - platform: state
+    entity_id: !input presence_entity
+  - platform: state
+    entity_id: !input sleep_entity
+  - platform: event
+    event_type: call_service
+    event_data:
+      domain: light
+      service: turn_on
+
+
+# ACTION
+action:
+  - choose:
+    # Elevation/Presence/Sleep: Turn OFF (target lights)
+    - conditions: "{{ elevation_turn_off or presence_off or sleep_off }}"
+      sequence:
+        - choose:
+          - conditions: "{{ lights_target | length > 0 }}"
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: "{{ lights_target }}"
+    # Elevation/Presence: Turn ON (off lights to elevation brightness)
+    - conditions: >-
+        {{ (elevation_turn_on and presence_condition and sleep_condition)
+            or (presence_on and elevation_condition and sleep_condition)
+            or (sleep_on and presence_condition and elevation_condition) }}
+      sequence:
+        - choose:
+          - conditions: "{{ lights_off_onoff | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_off_onoff }}"
+        - choose:
+          - conditions: "{{ lights_off_brightness | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_off_brightness }}"
+                  brightness: "{{ elevation_brightness }}"
+        - choose:
+          - conditions: "{{ lights_off_color | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_off_color }}"
+                  brightness: "{{ elevation_brightness }}"
+                  hs_color:
+                    - "{{ circadian_hue_value }}"
+                    - "{{ circadian_saturation_default }}"
+        - choose:
+          - conditions: "{{ lights_off_temperature | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_off_temperature }}"
+                  brightness: "{{ elevation_brightness }}"
+                  color_temp: "{{ circadian_temperature_value }}"
+    # Event: Turn on (trigger lights to circadian brightness)
+    - conditions: "{{ turnon_trigger }}"
+      sequence:
+        - choose:
+          - conditions: "{{ lights_trigger_brightness | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_trigger_brightness }}"
+                  brightness: "{{ circadian_brightness_value }}"
+        - choose:
+          - conditions: "{{ lights_trigger_color | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_trigger_color }}"
+                  brightness: "{{ circadian_brightness_value }}"
+                  hs_color:
+                    - "{{ circadian_hue_value }}"
+                    - "{{ circadian_saturation_default }}"
+        - choose:
+          - conditions: "{{ lights_trigger_temperature | length > 0 }}"
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ lights_trigger_temperature}}"
+                  brightness: "{{ circadian_brightness_value }}"
+                  color_temp: "{{ circadian_temperature_value }}"
+    # Default (on lights to circadian, dim lights to elevation brightness)
+    default:
+      - choose:
+        - conditions: "{{ lights_on_brightness | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_on_brightness }}"
+                brightness: "{{ circadian_brightness_value }}"
+      - choose:
+        - conditions: "{{ lights_on_color | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_on_color }}"
+                brightness: "{{ circadian_brightness_value }}"
+                hs_color:
+                  - "{{ circadian_hue_value }}"
+                  - "{{ circadian_saturation_default }}"
+      - choose:
+        - conditions: "{{ lights_on_temperature | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_on_temperature }}"
+                brightness: "{{ circadian_brightness_value }}"
+                color_temp: "{{ circadian_temperature_value }}"
+      - choose:
+        - conditions: "{{ lights_dim_brightness | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_dim_brightness }}"
+                brightness: "{{ elevation_brightness }}"
+      - choose:
+        - conditions: "{{ lights_dim_color | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_dim_color }}"
+                brightness: "{{ elevation_brightness }}"
+                hs_color:
+                  - "{{ circadian_hue_value }}"
+                  - "{{ circadian_saturation_default }}"
+      - choose:
+        - conditions: "{{ lights_dim_temperature | length > 0 }}"
+          sequence:
+            - service: light.turn_on
+              data:
+                entity_id: "{{ lights_dim_temperature }}"
+                brightness: "{{ elevation_brightness }}"
+                color_temp: "{{ circadian_temperature_value }}"
